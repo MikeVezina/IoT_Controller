@@ -5,8 +5,16 @@
  *      Author: MVezina
  */
 
+#include <sys/msg.h>
+#include <signal.h>
+#include <errno.h>
+
 #ifndef DEVICECOMMUNICATOR_H_
 #define DEVICECOMMUNICATOR_H_
+
+int InitializeDevCommunicator()
+void MessageRecieved();
+int InitializeMessageQueue();
 
 
 

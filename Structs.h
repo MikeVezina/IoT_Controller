@@ -20,11 +20,19 @@ enum DeviceType
 } typedef DeviceType;
 
 
-// Structure for device registration messages
-struct DeviceRegistrationMessage
+// Structure for Message Header (All Message Structs must include this)
+struct MessageHeader
 {
 	long int msgType;
+	pid_t sourcePid;
+	pid_t destinationPid;
 
+} typedef MessageHeader;
+
+
+// Structure for Device Info
+struct DeviceInfo
+{
 	// Process ID of the device
 	pid_t pid;
 
@@ -40,13 +48,21 @@ struct DeviceRegistrationMessage
 	// The threshold value that is looked at if and only if the 'hasThreshold' variable is != 0
 	int threshold;
 
+} typedef DeviceInfo;
+
+// Structure for device registration messages
+struct DeviceRegistrationMessage
+{
+	MessageHeader msgHdr;
+
+	DeviceInfo devInfo;
 
 } typedef DeviceRegistrationMessage;
 
 // Structure for Sensor data messages
 struct SensorDataMessage
 {
-	long int msgType;
+	MessageHeader msgHdr;
 
 	// For now, only one byte will be used for sensing data
 	char data[1];
@@ -56,7 +72,7 @@ struct SensorDataMessage
 // Structure for Command Messages
 struct CommandMessage
 {
-	long int msgType;
+	MessageHeader msgHdr;
 
 	// One byte used for a command
 	/*

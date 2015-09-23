@@ -59,30 +59,33 @@ int main(int argsv, char *args[]){
 	}
 
 	// Create the child process through fork()
-	pid_t pid = fork();
+	pid_t childpid = fork();
 
 
 	// Use switch cases to determine if fork completed successfully, and to determine
 	// who the parent and child processes are
-	switch(pid)
+	switch(childpid)
 	{
 		// fork failed
 		case -1:
 		{
-
 			fprintf(stderr, "Fork failed with error code %d. The Controller failed to start.\n", errno);
 			return errno;
 		}
 		// Child Process
 		case 0:
 		{
-			// Child Initialization
-			InitializeDevCommunicator();
 
-			// We want to pause and wait for a signal forever. To quit the child process, an "Exit" message must be sent through the message queue
 			while(1)
 			{
-				pause();
+				// We want to check for messages twice a second
+				CheckForMessages();
+
+				// 10^3 microseconds in 1 milliseconds
+				// Therefore 500*10^3 = 500 milliseconds = 0.5 seconds
+				usleep(500*(10^3));
+
+				// We can exit out of the child process by sending it an exit command
 			}
 
 			break;
@@ -91,42 +94,44 @@ int main(int argsv, char *args[]){
 		default:
 		{
 			// Print Child and Parent PID
-			printf("Child PID: %d.\nParent PID: %d.\n", pid, getpid());
-			sleep(1);
-
+			printf("Child PID: %d\nParent PID: %d\n", childpid, getpid());
 
 
 			DeviceRegistrationMessage devMsg;
-			strcpy(devMsg.devName, "asd");
-			devMsg.msgType = MSG_DEVREG;
+			strcpy(devMsg.devInfo.devName, "asd");
+			devMsg.msgHdr.msgType = MSG_DEVREG;
 
 
 
-			if(msgsnd(msqid, (void *) &devMsg,sizeof(devMsg)-sizeof(devMsg.msgType),0) == -1)
+			// Send a message to the message queue
+			if(msgsnd(msqid, (void *) &devMsg,sizeof(devMsg)-sizeof(devMsg.msgHdr.msgType),0) == -1)
 			{
 				fprintf(stderr, "msgsnd failed, err: %d\n", errno);
 			}
 			else
 			{
-				printf("Message Sent. Signalling Child Process...\n");
-				kill(pid, SIGINT);
+				printf("Message Sent...\n");
 			}
 
+			sleep(2);
 
-			CommandMessage cmd;
-			cmd.msgType = MSG_CMD;
-			cmd.command[0]= 0xE;
+			CommandMessage cmdMsg;
+			cmdMsg.msgHdr.msgType = MSG_CMD;
+			cmdMsg.command[0] = 0xE;
+			cmdMsg.msgHdr.destinationPid = childpid;
+			cmdMsg.msgHdr.sourcePid = getpid();
 
-			if(msgsnd(msqid, (void *) &cmd,sizeof(cmd)-sizeof(cmd.msgType),0) == -1)
-						{
-							fprintf(stderr, "msgsnd failed, err: %d\n", errno);
-						}
-						else
-						{
-							printf("Message Sent. Signalling Child Process...\n");
+			// Send a message to the message queue
+			if(msgsnd(msqid, (void *) &cmdMsg,sizeof(cmdMsg)-sizeof(cmdMsg.msgHdr.msgType),0) == -1)
+			{
+				fprintf(stderr, "msgsnd failed, err: %d\n", errno);
+			}
+			else
+			{
+				printf("Message Sent...\n");
+			}
 
-						}
-
+			wait((void*)0);
 
 			break;
 		}

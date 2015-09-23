@@ -27,6 +27,14 @@
 #include <unistd.h>
 #include <errno.h>
 
+#include "CloudCommunicator/CloudCommunicator.h"
+#include "DeviceCommunicator/DeviceCommunicator.h"
+
+
+// Array of all registered device information
+DeviceInfo registeredDeviceInfo[];
+
+
 
 int main(int argsv, char *args[]){
 
@@ -43,19 +51,19 @@ int main(int argsv, char *args[]){
 	{
 		// fork failed
 		case -1:
-
-			printf("Fork failed with error code %d. The Controller will quit.", errno);
+			sprintf(stderr, "Fork failed with error code %d. The Controller will quit.", errno);
 			return errno;
 
 		// Child Process
 		case 0:
+			// ChildInitialization
 			printf("Yes, this is the child.");
 			break;
 
 		// Parent process where pid = PID of child
 		default:
+			//
 			printf("This is the parent. If you're looking for the child, its at PID: %d.", pid);
-
 			break;
 	}
 

@@ -5,21 +5,66 @@
  *      Author: MVezina
  */
 
+#include <stdlib.h>
+#include <unistd.h>
+
 #ifndef STRUCTS_H_
 #define STRUCTS_H_
 
 
-// Create a struct for registered device information
-
-struct DeviceInfo
+// Enum used to specify the type of device
+enum DeviceType
 {
-	pid_t pid = 0;
-	char* szDeviceName = (char *)0;
-	char hasThreshold = 0x0;
-	int threshold = 0;
+	Sensor,
+	Actuator
+} typedef DeviceType;
 
-} typedef DeviceInfo;
 
+// Structure for device registration messages
+struct DeviceRegistrationMessage
+{
+	long int msgType;
+
+	// Process ID of the device
+	pid_t pid;
+
+	// Device name (null-terminated string)
+	char devName[25];
+
+	// Device type (see DeviceType enum)
+	DeviceType devType;
+
+	// This value is either true ( != 0 ) or False ( = 0 ) to show that the device has a specified threshold
+	char hasThreshold;
+
+	// The threshold value that is looked at if and only if the 'hasThreshold' variable is != 0
+	int threshold;
+
+
+} typedef DeviceRegistrationMessage;
+
+// Structure for Sensor data messages
+struct SensorDataMessage
+{
+	long int msgType;
+
+	// For now, only one byte will be used for sensing data
+	char data[1];
+
+} typedef SensorDataMessage;
+
+// Structure for Command Messages
+struct CommandMessage
+{
+	long int msgType;
+
+	// One byte used for a command
+	/*
+	 * Commands:
+	 * 0xE = Exit
+	 */
+	char command[1];
+} typedef CommandMessage;
 
 
 #endif /* STRUCTS_H_ */

@@ -23,6 +23,8 @@
  *      Author: MVezina
  */
 
+/* Controller.c is the main source file for execution of the controller */
+
 #include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -31,28 +33,92 @@
 #include <sys/wait.h>
 #include <string.h>
 
-#include "Structs.h"
 #include "CloudCommunicator/CloudCommunicator.h"
 #include "DeviceCommunicator/DeviceCommunicator.h"
-
-#define MSGKEY 69169
-
+#include "Messages/Messages.h"
 
 
-// Array of all registered device information
-//DeviceInfo registeredDeviceInfo[2];
 
+char controllerName[25];
 
-int main(int argsv, char *args[]){
+void TestMessageSystem()
+{
+	DEVICEREGISTRATIONMESSAGE devMsg;
+	strcpy(devMsg.devInfo.devName, "asd");
+	devMsg.devInfo.pid = getpid();
+	devMsg.msgHdr.msgType = MSG_DEVREG;
 
+	// Send a message to the message queue
+	if (!SendMessage((void *) &devMsg, sizeof(devMsg) - sizeof(devMsg.msgHdr.msgType)))
+	{
+		printf("PID %d: Device Registration Message Sent\n", getpid());
+	}
 
+	strcpy(devMsg.devInfo.devName, "asd2");
+
+	// Send a message to the message queue
+	if (!SendMessage((void *) &devMsg, sizeof(devMsg) - sizeof(devMsg.msgHdr.msgType)))
+	{
+		printf("PID %d: Device Registration Message Sent\n", getpid());
+	}
+
+	strcpy(devMsg.devInfo.devName, "asd3");
+
+	// Send a message to the message queue
+	if (!SendMessage((void *) &devMsg, sizeof(devMsg) - sizeof(devMsg.msgHdr.msgType)))
+	{
+		printf("PID %d: Device Registration Message Sent\n", getpid());
+	}
+
+	SENSORDATAMESSAGE sdm;
+	sdm.msgHdr.msgType = MSG_SENINF;
+	// Send a message to the message queue
+	if (!SendMessage((void *) &sdm, sizeof(sdm) - sizeof(sdm.msgHdr.msgType)))
+	{
+		printf("PID %d: Device Sensor Message Sent\n", getpid());
+	}
+
+	sleep(2);
+
+	COMMANDMESSAGE cmdMsg;
+	cmdMsg.msgHdr.msgType = MSG_CMD;
+	cmdMsg.command[0] = 0xE;
+	cmdMsg.msgHdr.sourcePid = getpid();
+
+	// Send a message to the message queue
+	if (msgsnd(msqid, (void *) &cmdMsg, sizeof(cmdMsg) - sizeof(cmdMsg.msgHdr.msgType), 0) == -1)
+	{
+		fprintf(stderr, "msgsnd failed, err: %d\n", errno);
+	}
+	else
+	{
+		printf("PID %d: Command Message Sent\n", getpid());
+	}
+}
+
+int main(int argsv, char *args[])
+{
+	if (argsv != 2)
+	{
+		printf("Controller usage: controller [ControllerName (<= 24 chars)]");
+		exit(1);
+	}
+
+	if (strlen(args[1]) > 24)
+	{
+
+		fprintf(stdout, "The controller name must be a maximum of 24 characters\n");
+		exit(1);
+	}
+	strcpy(controllerName, args[1]);
+
+	printf("Controller %s: has started!\n", controllerName);
 
 	// Initialize the message queue
-	msqid = msgget((key_t)MSGKEY, 0666 | IPC_CREAT);
-
+	msqid = msgget((key_t) MSGKEY, 0666 | IPC_CREAT);
 
 	// Ensure the message queue was initialized successfully
-	if(msqid == -1)
+	if (msqid == -1)
 	{
 		fprintf(stderr, "msgget failed with error %d\n", errno);
 		return -1;
@@ -61,10 +127,9 @@ int main(int argsv, char *args[]){
 	// Create the child process through fork()
 	pid_t childpid = fork();
 
-
 	// Use switch cases to determine if fork completed successfully, and to determine
 	// who the parent and child processes are
-	switch(childpid)
+	switch (childpid)
 	{
 		// fork failed
 		case -1:
@@ -72,77 +137,40 @@ int main(int argsv, char *args[]){
 			fprintf(stderr, "Fork failed with error code %d. The Controller failed to start.\n", errno);
 			return errno;
 		}
-		// Child Process
+			// Child Process
 		case 0:
 		{
 
-			while(1)
+			while (1)
 			{
 				// We want to check for messages twice a second
 				CheckForMessages();
 
 				// 10^3 microseconds in 1 milliseconds
 				// Therefore 500*10^3 = 500 milliseconds = 0.5 seconds
-				usleep(500*(10^3));
+				usleep(500 * (10 ^ 3));
 
 				// We can exit out of the child process by sending it an exit command
 			}
 
 			break;
 		}
-		// Parent process where pid = PID of child
+			// Parent process where pid = PID of child
 		default:
 		{
 			// Print Child and Parent PID
 			printf("Child PID: %d\nParent PID: %d\n", childpid, getpid());
 
+			TestMessageSystem();
 
-			DeviceRegistrationMessage devMsg;
-			strcpy(devMsg.devInfo.devName, "asd");
-			devMsg.msgHdr.msgType = MSG_DEVREG;
-
-
-
-			// Send a message to the message queue
-			if(msgsnd(msqid, (void *) &devMsg,sizeof(devMsg)-sizeof(devMsg.msgHdr.msgType),0) == -1)
-			{
-				fprintf(stderr, "msgsnd failed, err: %d\n", errno);
-			}
-			else
-			{
-				printf("Message Sent...\n");
-			}
-
-			sleep(2);
-
-			CommandMessage cmdMsg;
-			cmdMsg.msgHdr.msgType = MSG_CMD;
-			cmdMsg.command[0] = 0xE;
-			cmdMsg.msgHdr.destinationPid = childpid;
-			cmdMsg.msgHdr.sourcePid = getpid();
-
-			// Send a message to the message queue
-			if(msgsnd(msqid, (void *) &cmdMsg,sizeof(cmdMsg)-sizeof(cmdMsg.msgHdr.msgType),0) == -1)
-			{
-				fprintf(stderr, "msgsnd failed, err: %d\n", errno);
-			}
-			else
-			{
-				printf("Message Sent...\n");
-			}
-
-			wait((void*)0);
+			wait((void*) 0);
 
 			break;
 		}
 	}
 
-
-
-	fprintf(stdout, "%d has quit!\n", getpid());
+	fprintf(stdout, "PID %d: has Quit\n", getpid());
 	return 0;
 
-
 }
-
 

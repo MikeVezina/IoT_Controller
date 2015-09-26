@@ -6,33 +6,29 @@
  */
 
 #include <sys/msg.h>
-#include <signal.h>
 #include <errno.h>
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
-#include "../Structs.h"
 
-// Message Types
-#define MSG_CMD		1 /* Command Message */
-#define MSG_DEVREG	2 /* Device Registration Message */
-#define MSG_SENINF	3 /* Sensor Information Message */
+#include "../Devices/Devices.h"
+#include "../Messages/Messages.h"
+
 
 
 #ifndef DEVICECOMMUNICATOR_H_
 #define DEVICECOMMUNICATOR_H_
 
+/* Function Prototypes */
+int RegisterDevice(DEVICEINFO *deviceInfo);
+int isRegisteredDevice(pid_t devicePid);
+void CheckForMessages();
+void Quit();
+void ForceQuit();
 
 
-
-int CheckForMessage(void *msg, size_t msgsz, int msgtype);
-int InitializeDevCommunicator();
-void MessageRecieved();
-void Exit();
-
-// Create a global variable for access to queue ID
-// Message Queue ID
-int msqid;
+// Create the head of the device linked list
+PDEVICELINK headDevice;
 
 
 #endif /* DEVICECOMMUNICATOR_H_ */

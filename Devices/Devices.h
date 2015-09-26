@@ -92,6 +92,7 @@ struct SENSORINFO
 
 }typedef SENSORINFO;
 
+
 struct DEVICELINK
 {
 	DEVICEINFO devInfo;

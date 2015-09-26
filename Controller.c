@@ -80,7 +80,6 @@ void TestMessageSystem()
 	devComPid = cmd.msgHdr.sourcePid;
 
 
-
 	SENSORDATAMESSAGE sdm;
 	SetMessageHeader((void *)&sdm,devComPid,MSG_SENINF);
 	sdm.sensorInfo.data[0] = 26;

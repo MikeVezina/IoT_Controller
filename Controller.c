@@ -53,7 +53,7 @@ void TestMessageSystem()
 	strcpy(devMsg.devInfo.devName, "TEMPSENSOR1");
 
 
-	// Set Device PID and type
+	// Set Device Information
 	devMsg.devInfo.pid = getpid();
 	devMsg.devInfo.devType = DEVTYPE_SENSOR;
 	devMsg.devInfo.sensType = SENSTYPE_TEMPERATURE;

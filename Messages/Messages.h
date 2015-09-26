@@ -18,14 +18,19 @@
 #define MESSAGES_H_
 
 /* Message Types */
-#define MSG_CMD		1 /* Command Message */
-#define MSG_DEVREG	2 /* Device Registration Message */
-#define MSG_SENINF	3 /* Sensor Information Message */
+#define MSG_CMD			1 /* Process Command Message */
+#define MSG_DEVREG		2 /* Device Registration Message */
+#define MSG_SENINF		3 /* Sensor Information Message */
+#define MSG_ACTCMD		4 /* Actuator Command Message */
+#define MSG_ACTCMDRES	5 /* Actuator Command Response Message */
 
-/* Command Message Types */
-#define CMD_REGACK 		0xA
-#define CMD_QUIT 		0xE
-#define CMD_FORCEQUIT 	0xF
+
+/* Process Command Message Types */
+#define CMD_REGACK 		0xA /* Device Registration Acknowledged Command */
+#define CMD_QUIT 		0xE /* Quit Process Command */
+#define CMD_FORCEQUIT 	0xF /* Force Quit Process Command */
+
+
 
 // Structure for Message Header (All Message Structs must include this)
 struct MESSAGEHEADER
@@ -34,16 +39,15 @@ struct MESSAGEHEADER
 	pid_t sourcePid;
 	pid_t destinationPid;
 
-} typedef MESSAGEHEADER;
+}typedef MESSAGEHEADER;
 
 // Structure for device registration messages
 struct DEVICEREGISTRATIONMESSAGE
 {
 	MESSAGEHEADER msgHdr;
-
 	DEVICEINFO devInfo;
 
-} typedef DEVICEREGISTRATIONMESSAGE;
+}typedef DEVICEREGISTRATIONMESSAGE;
 
 // Structure for Sensor data messages
 struct SENSORDATAMESSAGE
@@ -51,24 +55,47 @@ struct SENSORDATAMESSAGE
 	MESSAGEHEADER msgHdr;
 	SENSORINFO sensorInfo;
 
-} typedef SENSORDATAMESSAGE;
+}typedef SENSORDATAMESSAGE;
 
 // Structure for Command Messages
-struct COMMANDMESSAGE
+struct PROCESSCOMMANDMESSAGE
 {
 	MESSAGEHEADER msgHdr;
-
-	// One byte used for a command
-	/*
-	 * Commands:
-	 * 0xE = Exit
-	 */
 	char command[1];
-} typedef COMMANDMESSAGE;
+}typedef PROCESSCOMMANDMESSAGE;
+
+// Actuator Command Message
+struct ACTUATORCOMMANDMESSAGE
+{
+	MESSAGEHEADER msgHdr;
+	char commandSequence;
+	ThresholdAction threshAction;
+
+}typedef ACTUATORCOMMANDMESSAGE;
+
+// Actuator Command Response Message
+struct ACTUATORCOMMANDRESPONSEMESSAGE
+{
+	// Standard MessageHeader
+	MESSAGEHEADER msgHdr;
+
+	// Command Sequence Number
+	char commandSequence;
+
+	// 1 if Command Was processed
+	char completedSuccessfully;
+
+	// 0 if no error
+	// Else, specified the error number
+	char errorNum;
+
+
+}typedef ACTUATORCOMMANDRESPONSEMESSAGE;
 
 /* Function Prototypes */
-int SetMessageHeader(MESSAGEHEADER *msgHdr,pid_t destPid, long int msgType);
+int SetMessageHeader(MESSAGEHEADER *msgHdr, pid_t destPid, long int msgType);
 int ReceiveMessage(void *msg, size_t msgsz, long int msgtype);
+int SendMessage(void *msg, size_t msgsz);
 void CloseMessageQueue();
 
 // The key used for the message queue
@@ -77,6 +104,5 @@ void CloseMessageQueue();
 // Create a global variable for access to
 // Message Queue ID:
 int msqid;
-
 
 #endif /* MESSAGES_H_ */

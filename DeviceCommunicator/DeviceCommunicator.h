@@ -21,14 +21,22 @@
 
 /* Function Prototypes */
 int RegisterDevice(DEVICEINFO *deviceInfo);
-int isRegisteredDevice(pid_t devicePid);
+DEVICEINFO *getRegisteredDevice(pid_t devicePid);
 void CheckForMessages();
+void ProcessSensorMessage(SENSORDATAMESSAGE *senMsg);
+void SendActCommand(ActuatorType actType, ThresholdAction threshAct);
+void PrintDeviceInfo(DEVICEINFO *devInfo);
+void PrintSensorInfo(SENSORINFO *senInfo);
 void Quit();
 void ForceQuit();
 
 
 // Create the head of the device linked list
-PDEVICELINK headDevice;
+PDEVICELINK headRegisteredDevice;
+
+// Tracks the command sequence number
+// So that actions can be completed in sequence by actuators
+int currentCommandSequence;
 
 
 #endif /* DEVICECOMMUNICATOR_H_ */

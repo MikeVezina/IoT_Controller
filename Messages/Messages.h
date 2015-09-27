@@ -23,13 +23,15 @@
 #define MSG_SENINF		3 /* Sensor Information Message */
 #define MSG_ACTCMD		4 /* Actuator Command Message */
 #define MSG_ACTCMDRES	5 /* Actuator Command Response Message */
+#define MSG_THRESHCROSS	6
 
 
 /* Process Command Message Types */
 #define CMD_REGACK 		0xA /* Device Registration Acknowledged Command */
+#define CMD_REQSENINFO	0xB /* Request Latest Sensor Information */
+#define CMD_CLOSEACK	0xC /* Device Close Acknowledged */
 #define CMD_QUIT 		0xE /* Quit Process Command */
 #define CMD_FORCEQUIT 	0xF /* Force Quit Process Command */
-
 
 
 // Structure for Message Header (All Message Structs must include this)
@@ -92,10 +94,19 @@ struct ACTUATORCOMMANDRESPONSEMESSAGE
 
 }typedef ACTUATORCOMMANDRESPONSEMESSAGE;
 
+// Threshold Crossing Message
+struct THRESHOLDCROSSINGMESSAGE
+{
+	MESSAGEHEADER msgHdr;
+	DEVICEINFO devInfo;
+	SENSORINFO sensInfo;
+
+} typedef THRESHOLDCROSSINGMESSAGE;
 /* Function Prototypes */
 int SetMessageHeader(MESSAGEHEADER *msgHdr, pid_t destPid, long int msgType);
 int ReceiveMessage(void *msg, size_t msgsz, long int msgtype);
 int SendMessage(void *msg, size_t msgsz);
+int SendProcessCommand(char command, pid_t destinationPID);
 void CloseMessageQueue();
 
 // The key used for the message queue

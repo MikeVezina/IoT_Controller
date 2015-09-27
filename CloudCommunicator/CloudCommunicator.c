@@ -5,4 +5,9 @@
  *      Author: MVezina
  */
 
+#include "CloudCommunicator.h"
 
+void InitializeFIFOClient()
+{
+
+}

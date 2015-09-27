@@ -34,15 +34,37 @@ int SetMessageHeader(MESSAGEHEADER *msgHdr, pid_t destPid, long int msgType)
 	return 0;
 }
 
+
+int SendProcessCommand(char command, pid_t destinationPID)
+{
+
+	PROCESSCOMMANDMESSAGE cmd;
+	SetMessageHeader(&cmd.msgHdr, destinationPID, MSG_CMD);
+
+	cmd.command[0] = command;
+
+	if(!SendMessage(&cmd,sizeof(cmd) - sizeof(cmd.msgHdr.msgType)))
+	{
+		return 0;
+	}
+	return -1;
+
+}
+
 // Function that checks for a message in the queue
 // msgsz is the size of the message struct without the message type
 // Uses msgrcv to write any available messages of msgtype into the pointer specified with the specified size
 // Returns -1 if error occurs or no message of specified type was found, else returns 0 for success
 int ReceiveMessage(void *msg, size_t msgsz, long int msgtype)
 {
+
+
+
 	// Check if msg is null
 	if (!msg)
 		return -1;
+
+
 
 	// Check to make sure this message is designated for the current process by checking the destination PID (in message header)
 	// This check only needs to be done for commands to ensure the command is sent to the right process
@@ -50,23 +72,34 @@ int ReceiveMessage(void *msg, size_t msgsz, long int msgtype)
 	size_t oldMsgSz = msgsz + sizeof(msgtype);
 	void *oldMsg = malloc(oldMsgSz);
 
+	if(!oldMsg)
+	{
+		fprintf(stderr, "Failed To Allocate Memory. Quitting\n");
+		exit(0);
+		return -1;
+	}
+
 	// Copies memory from msg to msgOld
 	memcpy(oldMsg, msg, oldMsgSz);
 
 	// We want to check the queue for a specified message
 	if (msgrcv(msqid, msg, msgsz, msgtype, IPC_NOWAIT) == -1)
 	{
+
+
 		switch (errno)
 		{
 			// If the error was no message of specified type, no action will be taken and execution will continue
 			case ENOMSG:
 			{
+
 				// Don't Do anything. The message of the specified type was not found
 				break;
 			}
 			default:
 			{
-				fprintf(stderr, "Error: ReceiveMessage(): msgrcv(msgtype: %li) failed! Error Number: %d. Error Desc.:%s\n", msgtype, errno, strerror(errno));
+
+				fprintf(stderr, "Error: ReceiveMessage(): msgrcv(msgtype: %li) failed! Error Number: %d. Error: %s\n", msgtype, errno, strerror(errno));
 				CloseMessageQueue();
 				break;
 			}
@@ -84,12 +117,21 @@ int ReceiveMessage(void *msg, size_t msgsz, long int msgtype)
 		// We want to ensure it was designated to the current process
 		// If the PID does not match, we undo any writing to the block of memory
 
-		if (msgtype == MSG_CMD)
+		if (msgtype == MSG_CMD || msgtype == MSG_ACTCMD || msgtype == MSG_ACTCMDRES)
 		{
-			if (((PROCESSCOMMANDMESSAGE *) msg)->msgHdr.destinationPid != getpid())
+			if (((MESSAGEHEADER *) msg)->destinationPid != getpid())
 			{
+
+				// Now, we must re-add the message to the queue
+				if(SendMessage(msg,msgsz))
+				{
+					fprintf(stderr, "ReceiveMessage() failed to add message back to queue after failed pid match.\n");
+				}
+
 				// Since the pid does not match, we will undo mscrcv by copying the original message back into the struct
 				memcpy(msg, oldMsg, oldMsgSz);
+
+
 
 				// Free msgOld memory block
 				free(oldMsg);
@@ -99,7 +141,6 @@ int ReceiveMessage(void *msg, size_t msgsz, long int msgtype)
 			}
 
 		}
-
 		free(oldMsg);
 		// Successfully written to passed in structure
 		return 0;
@@ -109,6 +150,8 @@ int ReceiveMessage(void *msg, size_t msgsz, long int msgtype)
 
 int SendMessage(void *msg, size_t msgsz)
 {
+	if(!msg)
+		return -1;
 
 	// msgsz must be larger than sizeof(MESSAGEHEADER)-sizeof(long int)
 	if (msgsz < (sizeof(MESSAGEHEADER) - sizeof(long int)))
@@ -121,6 +164,8 @@ int SendMessage(void *msg, size_t msgsz)
 	if (msgsnd(msqid, msg, msgsz, 0) == -1)
 	{
 		fprintf(stderr, "SendMessage(): msgsnd failed, err: %d\n", errno);
+		CloseMessageQueue();
+		exit(0);
 		return -1;
 	}
 	return 0;
@@ -132,6 +177,8 @@ void CloseMessageQueue()
 	if (msgctl(msqid, IPC_RMID, 0) == -1)
 	{
 		fprintf(stderr, "Error: CloseMessageQueue(): msgctl remove failed. Error: %d\n", errno);
+		exit(1);
 	}
 	printf("PID %d: has Quit\n", getpid());
+
 }

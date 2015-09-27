@@ -33,77 +33,13 @@
 #include <sys/wait.h>
 #include <string.h>
 
-
 #include "CloudCommunicator/CloudCommunicator.h"
 #include "DeviceCommunicator/DeviceCommunicator.h"
 #include "Messages/Messages.h"
 #include "Devices/Devices.h"
-
+#include "SignalAssist/SignalAssist.h"
 
 char controllerName[25];
-
-void TestMessageSystem()
-{
-	pid_t devComPid;
-
-	DEVICEREGISTRATIONMESSAGE devMsg;
-	SetMessageHeader((void *)&devMsg,0,MSG_DEVREG);
-
-	// Set Device Name
-	strcpy(devMsg.devInfo.devName, "TEMPSENSOR1");
-
-
-	// Set Device Information
-	devMsg.devInfo.pid = getpid();
-	devMsg.devInfo.devType = DEVTYPE_SENSOR;
-	devMsg.devInfo.sensType = SENSTYPE_TEMPERATURE;
-	devMsg.devInfo.hasThreshold = 1;
-	devMsg.devInfo.threshold = 25;
-	devMsg.devInfo.thresholdAction = THAC_AC_ON;
-
-	// Send a message to the message queue
-	if (!SendMessage((void *) &devMsg, sizeof(devMsg) - sizeof(devMsg.msgHdr.msgType)))
-	{
-		printf("PID %d: Device Registration Message Sent.\n-- Waiting for Registration Acknowledgement --\n\n", getpid());
-	}
-
-
-	PROCESSCOMMANDMESSAGE cmd;
-
-	// Wait for device registration ack from DeviceCommunicator
-	while(ReceiveMessage(&cmd,sizeof(cmd)-sizeof(cmd.msgHdr.msgType),MSG_CMD) || cmd.command[0] != CMD_REGACK);
-
-	// Ack has been recieved. The device is now registered!
-	printf("PID %d: -- Ack Received! --\n",getpid());
-
-	// Set the devComPid to source pid
-	devComPid = cmd.msgHdr.sourcePid;
-
-
-	SENSORDATAMESSAGE sdm;
-	SetMessageHeader((void *)&sdm,devComPid,MSG_SENINF);
-	sdm.sensorInfo.data[0] = 26;
-
-	// Send a message to the message queue
-	if (!SendMessage((void *) &sdm, sizeof(sdm) - sizeof(sdm.msgHdr.msgType)))
-	{
-		printf("PID %d: Device Sensor Message Sent\n\n", getpid());
-	}
-
-	sleep(1);
-
-	PROCESSCOMMANDMESSAGE cmdMsg;
-	SetMessageHeader(&cmdMsg.msgHdr, devComPid, MSG_CMD);
-	cmdMsg.command[0] = CMD_QUIT;
-
-
-	// Send a message to the message queue
-	if (!SendMessage((void *) &cmdMsg, sizeof(cmdMsg) - sizeof(cmdMsg.msgHdr.msgType)))
-	{
-		printf("PID %d: Quit Command Sent To %d\n", getpid(), cmdMsg.msgHdr.destinationPid);
-
-	}
-}
 
 int main(int argsv, char *args[])
 {
@@ -125,7 +61,7 @@ int main(int argsv, char *args[])
 	strcpy(controllerName, args[1]);
 
 	// Controller has started message
-	printf("========================================\nController '%s': has started!\n", controllerName);
+	printf("\n\n========================================\nController '%s': has started!\n", controllerName);
 
 	// Initialize the message queue
 	msqid = msgget((key_t) MSGKEY, 0666 | IPC_CREAT);
@@ -137,12 +73,17 @@ int main(int argsv, char *args[])
 		return -1;
 	}
 
+	// Install Signal handlers
+	InstallControlCSignalHandlers();
+
+	InstallMessageSignalHandler();
+
 	// Create the child process through fork()
-	pid_t childpid = fork();
+	devComPID = fork();
 
 	// Use switch cases to determine if fork completed successfully, and to determine
 	// who the parent and child processes are
-	switch (childpid)
+	switch (devComPID)
 	{
 		// fork failed
 		case -1:
@@ -159,7 +100,7 @@ int main(int argsv, char *args[])
 				// We want to check for messages twice a second
 				CheckForMessages();
 
-				// 10^3 microseconds in 1 milliseconds
+				// 10^3 microseconds = 1 millisecond
 				// Therefore 500*10^3 = 500 milliseconds = 0.5 seconds
 				usleep(500 * (10 ^ 3));
 
@@ -171,21 +112,66 @@ int main(int argsv, char *args[])
 			// Parent process where pid = PID of child
 		default:
 		{
+
 			// Print Child and Parent PID
-			printf("Child PID: %d\nParent PID: %d\n========================================\n\n", childpid, getpid());
+			printf("Child PID: %d\nParent PID: %d\n========================================\n\n", devComPID, getpid());
+			printf("Waiting For Device Registration Messages...\n");
 
-			// Tests the message system by sending test messages
-			TestMessageSystem();
-
-			// Wait for child process to exit
-			wait((void*) 0);
+			while (1)
+			{
+				sleep(1);
+			}
 
 			break;
 		}
 	}
 
-	fprintf(stdout, "PID %d: has Quit\n", getpid());
 	return 0;
 
+}
+
+// Signal Handler: Child Has Sent Sensor Info To The Parent (CloudCommunicator)
+void MsgRcvd()
+{
+	if (devComPID)
+	{
+
+		// Read in the threshold crossing message (sent from the child)
+		THRESHOLDCROSSINGMESSAGE tcm;
+		if (!ReceiveMessage(&tcm, sizeof(tcm) - sizeof(tcm.msgHdr.msgType), MSG_THRESHCROSS))
+		{
+			printf("PID %d: Received Threshold Crossing Message! PID = %d\n\n", getpid(), tcm.devInfo.pid);
+			// Now notify the cloud process through fifo
+		}
+		else
+		{
+			printf("PID %d: Failed to receive Threshold Crossing Message\n", getpid());
+		}
+	}
+
+}
+
+// Signal Handler: The process has received a CTRL-C signal and must act appropriately
+void CtrlCPressed()
+{
+	// Since this handler is used by both the child and parent process,
+	// We can seperate the handler for both processes
+	// We need to use this handler for both processes because if one process quits, the other process will quit.
+	// Therefore, the following approach handles the input of Ctrl-C. Once the parent catches this, it will safely exit using quit commands.
+
+	if (devComPID)
+	{
+		// Send Quit Message to Child (DeviceCommunicator)
+		SendProcessCommand(CMD_QUIT, devComPID);
+		printf("\nControl-C has been pressed. Sending Quit Commands to all Devices\n");
+
+		// The child handles the safe unregistering and termination of all registered devices and removes the message queue
+		// Wait for Child to quit
+		int p = 0;
+		wait(&p);
+
+		printf("PID %d: has quit\n", getpid());
+		exit(0);
+	}
 }
 

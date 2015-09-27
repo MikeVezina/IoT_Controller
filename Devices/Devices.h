@@ -5,6 +5,14 @@
  *      Author: MVezina
  */
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+
+
+
 #ifndef DEVICES_H_
 #define DEVICES_H_
 
@@ -19,13 +27,15 @@ enum DeviceType{
 // (TH)reshold (AC)tions. Actions that are executed when a threshold is exceeded
 enum ThresholdAction
 {
-	THAC_NONE = 0x0,
+	THAC_NONE = 0x00,
 	THAC_AC_OFF = 0x01,
 	THAC_AC_ON = 0x02,
 	THAC_BELL_RING = 0x04,
 	THAC_FIRE_ALARM_RING = 0x08,
 	THAC_LIGHT_OFF = 0x10,
-	THAC_LIGHT_ON = 0x20
+	THAC_LIGHT_ON = 0x20,
+	THAC_WATER_ON = 0x40,
+	THAC_WATER_OFF = 0x80
 
 } typedef ThresholdAction;
 
@@ -45,6 +55,13 @@ enum ActuatorType{
 	ACTTYPE_LIGHT_SWITCH = 25
 
 }typedef ActuatorType;
+
+/* Actuator Command Response Error Numbers */
+enum ActuatorErrorNumber{
+	ERR_Action_Not_Defined = 1
+}typedef ActuatorErrorNumber;
+
+
 
 /* --- End Device Enums --- */
 
@@ -78,7 +95,11 @@ struct DEVICEINFO
 	// The threshold value that is looked at if and only if the 'hasThreshold' variable is != 0
 	int threshold;
 
-	// Threshold Action (Only used for sensors)
+	// If Device Type = DEVTYPE_SENSOR:
+	//		Threshold Action. The Action to be executed when the threshold is exceeded
+	//
+	// If Device Type = DEVTYPE_ACTUATOR:
+	//		Threshold Action Handler. Each bit represents the action that the actuator will handle
 	ThresholdAction thresholdAction;
 
 
@@ -104,6 +125,14 @@ struct DEVICELINK
 
 
 /* Device Function Prototypes */
-int SetDeviceInfo();
+int SetBasicDeviceInfo(DEVICEINFO *devInfo, char szDeviceName[], DeviceType devType);
+void PrintDeviceInfo(DEVICEINFO *devInfo);
+void PrintSensorInfo(SENSORINFO *senInfo);
+void GetDeviceKindName(char *buffer, size_t buffSize, int devKind);
+
+
+/* PID used to receive devComPID */
+/* This will be obtained from the message header *sourcePid* from the device Registration Acknowledgment command message */
+pid_t devComPID;
 
 #endif /* DEVICES_H_ */

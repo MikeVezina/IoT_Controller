@@ -10,10 +10,15 @@
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <time.h>
+#include <signal.h>
 
 #include "../Devices/Devices.h"
 #include "../Messages/Messages.h"
 
+// Amount of time to wait for device response before timeout has occurred
+// Ex: Wait 7 (default) Seconds before determining that the device is unresponsive
+#define DEVCLOSE_TIMEOUT 7
 
 
 #ifndef DEVICECOMMUNICATOR_H_
@@ -24,9 +29,7 @@ int RegisterDevice(DEVICEINFO *deviceInfo);
 DEVICEINFO *getRegisteredDevice(pid_t devicePid);
 void CheckForMessages();
 void ProcessSensorMessage(SENSORDATAMESSAGE *senMsg);
-void SendActCommand(ActuatorType actType, ThresholdAction threshAct);
-void PrintDeviceInfo(DEVICEINFO *devInfo);
-void PrintSensorInfo(SENSORINFO *senInfo);
+void SendActCommand(ThresholdAction threshAct);
 void Quit();
 void ForceQuit();
 
@@ -36,7 +39,7 @@ PDEVICELINK headRegisteredDevice;
 
 // Tracks the command sequence number
 // So that actions can be completed in sequence by actuators
-int currentCommandSequence;
+unsigned int currentCommandSequence;
 
 
 #endif /* DEVICECOMMUNICATOR_H_ */

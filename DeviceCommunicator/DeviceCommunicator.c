@@ -84,7 +84,7 @@ int UnregisterDevice(pid_t devicePID)
 	// Check to make sure the head node is not null
 	if (!headRegisteredDevice)
 	{
-		printf("No Registered Devices. \n");
+		printf("[Error]: No Registered Devices. \n");
 		return -1;
 	}
 
@@ -168,7 +168,10 @@ void CheckForMessages()
 			case CMD_REGACK: /* Device Registration Acknowledged */
 				break;
 			case CMD_QUIT: /* Request To Quit Application */
-				fprintf(stdout, "PID %d: The Device Communicator is now Exiting. (Requested By PID: %d)\n\n*********** Quitting Devices ***********\n\n", getpid(), cmd.msgHdr.sourcePid);
+
+				fprintf(stdout, "[Received]: Device Communicator Quit Requested By PID: %d\n\n", getpid());
+				if (headRegisteredDevice)
+					printf("[----------------------- Quitting Devices -----------------------]\n\n");
 				Quit();
 				break;
 			case CMD_FORCEQUIT: /* Request To Force Quit */
@@ -178,11 +181,11 @@ void CheckForMessages()
 
 				if (UnregisterDevice(cmd.msgHdr.sourcePid))
 				{
-					printf("PID %d: Failed to unregister device (PID: %d).\n", getpid(), cmd.msgHdr.sourcePid);
+					printf("[Received]: PID %d: Failed to unregister device (PID: %d).\n", getpid(), cmd.msgHdr.sourcePid);
 				}
 				else
 				{
-					printf("PID %d: Successfully unregistered device (PID: %d)\n", getpid(), cmd.msgHdr.sourcePid);
+					printf("[Received]: PID %d: Successfully unregistered device (PID: %d)\n\n", getpid(), cmd.msgHdr.sourcePid);
 				}
 
 				break;
@@ -194,7 +197,7 @@ void CheckForMessages()
 	// Proces all actuator command response messages
 	while (!ReceiveMessage(&acrm, sizeof(acrm) - sizeof(acrm.msgHdr.msgType), MSG_ACTCMDRES))
 	{
-		printf("Actuator command has been processed! Command Sequence: %d. Status: %d. Error Number: %d\n\n", acrm.commandSequence, acrm.completedSuccessfully, acrm.errorNum);
+		printf("[Received]: Actuator command has been processed!\n[Info]: Command Sequence %d, Status: %d. Error Number: %d\n\n", acrm.commandSequence, acrm.completedSuccessfully, acrm.errorNum);
 	}
 
 	// A while loop is used to ensure that the DeviceCommunicator
@@ -204,7 +207,7 @@ void CheckForMessages()
 	{
 		if (!RegisterDevice(&regMsg.devInfo))
 		{
-			fprintf(stdout, "PID %d: A New Device Has Been Registered!\n", getpid());
+			fprintf(stdout, "[Received]: PID %d: A New Device Has Been Registered!\n", getpid());
 			PrintDeviceInfo(&regMsg.devInfo);
 			printf("\n");
 
@@ -217,7 +220,7 @@ void CheckForMessages()
 			// Sends the Registration acknowledgement to the device
 			if (SendMessage(&cmdMsg, sizeof(cmdMsg) - sizeof(cmdMsg.msgHdr.msgType)))
 			{
-				printf("PID %d: Device ACK Failed. SendMessage error: %d", getpid(), errno);
+				printf("[Error]: PID %d: Device ACK -> SendMessage() Failed. (Error %d)", getpid(), errno);
 
 				// We force quit because this will only occur when there is a problem with the message queue
 				ForceQuit();
@@ -240,7 +243,7 @@ void ProcessSensorMessage(SENSORDATAMESSAGE *senMsg)
 	// Ensure senMsg is not null
 	if (!senMsg)
 	{
-		fprintf(stderr, "ProcessSensorMessage(): *senMsg is null");
+		fprintf(stdout, "[Error]: ProcessSensorMessage(): *senMsg is null");
 		return;
 	}
 
@@ -249,19 +252,17 @@ void ProcessSensorMessage(SENSORDATAMESSAGE *senMsg)
 
 	// If devInfo is null, return without processing the message
 	if (!devInfo)
-	{
 		return;
-	}
 
 	// Ensure that only devices that are sensors can send sensor information messages
 	if (devInfo->devType != DEVTYPE_SENSOR)
 	{
-		fprintf(stdout, "PID %d: A Non-Sensor Device Has Sent a Sensor Information Message! (Only sensors can send sensor information messages)", getpid());
+		fprintf(stdout, "[Received]: A Non-Sensor Device Has Sent a Sensor Information Message! (Only sensors can send sensor information messages)\n");
 		return;
 	}
 
 	// Print Sensor Info Received
-	fprintf(stdout, "***  PID %d: Sensor Data Received From PID %d!  ***\n", getpid(), devInfo->pid);
+	fprintf(stdout, "[Received]: Sensor Info Received From PID %d:\n", devInfo->pid);
 
 	// Process The Sensor Information
 	PrintSensorInfo(&senMsg->sensorInfo);
@@ -275,7 +276,7 @@ void ProcessSensorMessage(SENSORDATAMESSAGE *senMsg)
 		if (senMsg->sensorInfo.data[0] > devInfo->threshold)
 		{
 			// Print Valid Information
-			printf("* WARNING: Threshold Exceeded! *\n");
+			printf("[Warning]: Sensor Threshold Exceeded For The Following Device\n");
 			PrintDeviceInfo(devInfo);
 
 			// Use a variable to track the difference in sent sequences.
@@ -290,7 +291,8 @@ void ProcessSensorMessage(SENSORDATAMESSAGE *senMsg)
 			// If the difference is 0, No threshold action was executed
 			if (!(currentCommandSequence - currentCMDSeq))
 			{
-				printf("No Actuators are responsible for the specified threshold action (Action: %x) or No Actuators have been registered.\n", devInfo->thresholdAction);
+				printf("[Warning]: No Actuators are registered for the specified threshold action\n[Info]: Action 0x%x\n", devInfo->thresholdAction);
+				printf("[Warning]: No action will be executed\n");
 			}
 
 			THRESHOLDCROSSINGMESSAGE tcm;
@@ -302,14 +304,13 @@ void ProcessSensorMessage(SENSORDATAMESSAGE *senMsg)
 			// sendmessage -> device sensor info, sensing data, action
 			if (!SendMessage((void *) &tcm, sizeof(tcm) - sizeof(tcm.msgHdr.msgType)))
 			{
-				printf("\nPID %d: Notifying Cloud Communicator..\n", getpid());
+				printf("\n[Sent]: Threshold Exceeded Signal and Message to Cloud Communicator \n");
 				// Send the user defined signal to the parent
 				kill(getppid(), SIGUSR2);
 			}
 
 		}
 	}
-
 
 }
 
@@ -342,7 +343,7 @@ void SendActCommand(ThresholdAction threshAct)
 
 			if (!SendMessage((void *) &actCmd, sizeof(actCmd) - sizeof(actCmd.msgHdr.msgType)))
 			{
-				printf("Command Sent to PID %d ('%s')! Sequence: %d, Action: 0x%x\n", actCmd.msgHdr.destinationPid, pDevLink->devInfo.devName, actCmd.commandSequence, (pDevLink->devInfo.thresholdAction & threshAct));
+				printf("[Sent]: Actuator Command Sent to PID %d ('%s')!\n[Info]: Sequence %d, Action 0x%x\n", actCmd.msgHdr.destinationPid, pDevLink->devInfo.devName, actCmd.commandSequence, (pDevLink->devInfo.thresholdAction & threshAct));
 			}
 
 		}
@@ -362,10 +363,10 @@ void Quit()
 		// Sends the device process a quit command message
 		if (SendProcessCommand(CMD_QUIT, pDevLink->devInfo.pid))
 		{
-			fprintf(stderr, "PID %d: Failed To Send Process Command Signal to Device PID: %d\n", getpid(), pDevLink->devInfo.pid);
+			fprintf(stdout, "[Error]: PID %d: Failed To Send Quit Command Signal to Device PID: %d\n", getpid(), pDevLink->devInfo.pid);
 		}
 
-		printf("PID %d: Quit Command Sent To Device %d. Waiting for close acknowledgement from device..\n", getpid(), pDevLink->devInfo.pid);
+		printf("[Sent]: Quit Command Sent To Device '%s' (PID: %d).\n[Info]: Waiting for close acknowledgement from device.\n", pDevLink->devInfo.devName, pDevLink->devInfo.pid);
 
 		// Wait for a process quit acknowledgement command message from the Device
 		PROCESSCOMMANDMESSAGE cmd;
@@ -377,7 +378,7 @@ void Quit()
 			if (time(0) - startTime >= DEVCLOSE_TIMEOUT)
 			{
 
-				printf("PID %d: Device Quit Acknowledgement Timeout (Response Time Exceeded %d Seconds).\nDevice '%s' (PID: %d) failed to quit or is already closed.\n\n", getpid(), DEVCLOSE_TIMEOUT, pDevLink->devInfo.devName, pDevLink->devInfo.pid);
+				printf("[Timeout]: Device Quit Acknowledgement Timeout (%d Seconds).\n[Info]: '%s' (PID: %d) failed to quit or is already closed.\n\n", DEVCLOSE_TIMEOUT, pDevLink->devInfo.devName, pDevLink->devInfo.pid);
 				break;
 			}
 
@@ -386,7 +387,7 @@ void Quit()
 
 		if (cmd.command[0] == CMD_CLOSEACK)
 		{
-			printf("PID %d: Device '%s' (PID %d) has quit Successfully!\n\n", getpid(), pDevLink->devInfo.devName, cmd.msgHdr.sourcePid);
+			printf("[Received]: Device '%s' (PID %d) has quit Successfully!\n\n",  pDevLink->devInfo.devName, cmd.msgHdr.sourcePid);
 		}
 
 		// Continue to quit next device
@@ -401,7 +402,8 @@ void Quit()
 
 void ForceQuit()
 {
-	printf("*********** End Quitting Devices ***********\n\n");
+	if (headRegisteredDevice)
+		printf("[--------------------- End Quitting Devices ---------------------]\n\n");
 
 // Free all memory allocated for device linked list
 	if (headRegisteredDevice)
@@ -424,5 +426,6 @@ void ForceQuit()
 	}
 
 	CloseMessageQueue();
+	printf("[Quit]: PID %d: has Quit\n", getpid());
 	exit(0);
 }

@@ -15,14 +15,14 @@ void InstallControlCSignalHandlers()
 	sigAct.sa_flags = 0;
 
 	// Set Signal Handler (For Ctrl-C) and (For Interrupt Signal from child)
-	if(sigaction(SIGINT, &sigAct, 0))
+	if (sigaction(SIGINT, &sigAct, 0))
 	{
-		printf("PID %d: sigaction failed. Error Number: %d\n", getpid(), errno);
+		printf("[Error]: PID %d: sigaction failed. (Error %d)\n", getpid(), errno);
 		CloseMessageQueue();
+		printf("[Quit]: PID %d: has Quit\n", getpid());
+		exit(1);
 	}
 }
-
-
 
 void InstallMessageSignalHandler()
 {
@@ -35,18 +35,11 @@ void InstallMessageSignalHandler()
 
 	if (sigaction(SIGUSR2, &sigact, 0))
 	{
-		printf("PID %d: sigaction failed. Error Number: %d\n", getpid(), errno);
+		printf("[Error]: PID %d: sigaction failed. (Error %d)\n", getpid(), errno);
 		CloseMessageQueue();
-		exit(0);
-	}
-	else
-	{
-		printf("Successfully Installed Message Handler %d\n", getpid());
+		printf("[Quit]: PID %d: has Quit\n", getpid());
+		exit(1);
 	}
 
 }
-
-
-
-
 

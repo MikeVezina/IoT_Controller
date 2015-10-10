@@ -18,20 +18,27 @@
 #define MESSAGES_H_
 
 /* Message Types */
-#define MSG_CMD			1 /* Process Command Message */
-#define MSG_DEVREG		2 /* Device Registration Message */
-#define MSG_SENINF		3 /* Sensor Information Message */
-#define MSG_ACTCMD		4 /* Actuator Command Message */
-#define MSG_ACTCMDRES	5 /* Actuator Command Response Message */
-#define MSG_THRESHCROSS	6
+enum MSGTYPE
+{
+	MSG_CMD = 1,	/* Process Command Message */
+	MSG_DEVREG,		/* Device Registration Message */
+	MSG_SENINF,		/* Sensor Information Message */
+	MSG_ACTCMD,		/* Actuator Command Message */
+	MSG_ACTCMDRES,	/* Actuator Command Response Message */
+	MSG_THRESHCROSS,/* Threshold Crossing Message */
+	MSG_DEVINFO		/* Device Info Message */
+};
 
 
 /* Process Command Message Types */
-#define CMD_REGACK 		0xA /* Device Registration Acknowledged Command */
-#define CMD_REQSENINFO	0xB /* Request Latest Sensor Information */
-#define CMD_CLOSEACK	0xC /* Device Close Acknowledged */
-#define CMD_QUIT 		0xE /* Quit Process Command */
-#define CMD_FORCEQUIT 	0xF /* Force Quit Process Command */
+enum PROCESSCOMMAND
+{
+	CMD_REGACK		=	0xA,/* Device Registration Acknowledged Command */
+	CMD_REQSENINFO	=	0xB,/* Request Latest Sensor Information */
+	CMD_CLOSEACK	=	0xC,/* Device Close Acknowledged */
+	CMD_QUIT		=	0xE,/* Quit Process Command */
+	CMD_FORCEQUIT 	=	0xF	/* Force Quit Process Command */
+};
 
 
 // Structure for Message Header (All Message Structs must include this)
@@ -102,6 +109,7 @@ struct THRESHOLDCROSSINGMESSAGE
 	SENSORINFO sensInfo;
 
 } typedef THRESHOLDCROSSINGMESSAGE;
+
 /* Function Prototypes */
 int SetMessageHeader(MESSAGEHEADER *msgHdr, pid_t destPid, long int msgType);
 int ReceiveMessage(void *msg, size_t msgsz, long int msgtype);

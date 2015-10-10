@@ -13,14 +13,14 @@ int SetBasicDeviceInfo(DEVICEINFO *devInfo, char szDeviceName[], DeviceType devT
 {
 	if (!devInfo)
 	{
-		fprintf(stderr, "SetBasicDeviceInfo(): devInfo is null\n");
+		fprintf(stderr, "[Error]: SetBasicDeviceInfo(): devInfo is null\n");
 		return -1;
 	}
 
 	// Check to ensure device name is 24 characters or less
 	if (strlen(szDeviceName) > 24)
 	{
-		fprintf(stderr, "SetBasicDeviceInfo(): szDeviceName is larger than 24 characters\n");
+		fprintf(stderr, "[Error]: SetBasicDeviceInfo(): szDeviceName is larger than 24 characters\n");
 		return -1;
 	}
 
@@ -40,11 +40,12 @@ void PrintSensorInfo(SENSORINFO *senInfo)
 		return;
 
 	// Print Sensor Info
-	fprintf(stdout, "\n- Sensor Info:\n");
+	fprintf(stdout, "[=== Sensor Info ===]\n");
 	for (int i = 0; i < (sizeof(senInfo->data) / sizeof(senInfo->data[0])); i++)
 	{
 		fprintf(stdout, "   Data [%d]: %d\n", i, senInfo->data[i]);
 	}
+
 }
 
 // Prints the device info to stdout
@@ -53,6 +54,7 @@ void PrintDeviceInfo(DEVICEINFO *devInfo)
 	if (devInfo == 0)
 		return;
 
+	// Print Device Type for sensors
 	if (devInfo->devType == DEVTYPE_SENSOR)
 	{
 		char *devType;
@@ -74,17 +76,17 @@ void PrintDeviceInfo(DEVICEINFO *devInfo)
 		}
 
 		// Print out the different fields of device information
-		fprintf(stdout, "Device Information:\n========================\n   Device PID:\t%d\n   Device Name:\t%s\n   Device Type:\t%d (SENSOR) (%s)\n   Threshold? \t%c\n", devInfo->pid, devInfo->devName, devInfo->sensType, devType,
+		fprintf(stdout, "[=== Device Info ===]\n   Device PID:\t%d\n   Device Name:\t%s\n   Device Type:\t%d (SENSOR) (%s)\n   Threshold? \t%c\n", devInfo->pid, devInfo->devName, devInfo->sensType, devType,
 		(devInfo->hasThreshold) ? 'Y' : 'N');
 
 		// Only print the device threshold if the device has a threshold
 		if (devInfo->hasThreshold)
 			fprintf(stdout, "   Threshold:\t%d", devInfo->threshold);
 
-		printf("\n========================\n");
+		printf("\n");
 
 	}
-	else
+	else // Print Device Info for actuators
 	{
 
 		char *devType;
@@ -113,15 +115,8 @@ void PrintDeviceInfo(DEVICEINFO *devInfo)
 		}
 
 		// Print out the different fields of device information
-		fprintf(stdout, "Device Information:\n========================\n   Device PID:\t%d\n   Device Name:\t%s\n   Device Type:\t%d (ACTUATOR) (%s)\n   Handles Actions: \t%x\n",
-			devInfo->pid,
-			devInfo->devName,
-			devInfo->devType,
-			devType,
-			devInfo->thresholdAction
-			);
+		fprintf(stdout, "[=== Device Info ===]\n   Device PID:\t%d\n   Device Name:\t%s\n   Device Type:\t%d (ACTUATOR) (%s)\n   Actions: \t0x%x\n", devInfo->pid, devInfo->devName, devInfo->devType, devType, devInfo->thresholdAction);
 
-		printf("========================\n");
 
 	}
 

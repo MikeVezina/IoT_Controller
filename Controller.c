@@ -41,41 +41,51 @@
 
 char controllerName[25];
 
+void PrintUsage()
+{
+	printf("Usage: IoT_Controller [ControllerName]\n\t[ControllerName]: The name of the controller (1 - 24 Characters).\n");
+}
+
 int main(int argsv, char *args[])
 {
 	// Checks to make sure number of arguments is 2 for controller name
-	if (argsv != 2)
+	if (argsv != 2 || strlen(args[1]) == 0 || !strcasecmp(args[1], "-help"))
 	{
-		printf("Usage: IoT_Controller [ControllerName]\n\t[ControllerName]: The name of the controller. Maximum of 24 Characters\n");
+		PrintUsage();
 		exit(1);
 	}
 
 	// Ensures Controller Name is 24 or less characters
 	if (strlen(args[1]) > 24)
 	{
-		fprintf(stdout, "The controller name must be a maximum of 24 characters\n");
+		fprintf(stdout, "[Error]: The controller name must be a maximum of 24 characters\n");
+		PrintUsage();
 		exit(1);
 	}
 
 	// Copy Controller Name argument into controller name variable
 	strcpy(controllerName, args[1]);
 
+	// Clear the screen
+	system("clear");
+
 	// Controller has started message
-	printf("\n\n========================================\nController '%s': has started!\n", controllerName);
+	printf("=========================================\nController '%s': has started!\n", controllerName);
 
 	// Initialize the message queue
-	msqid = msgget((key_t) MSGKEY, 0666 | IPC_CREAT);
+	msqid = msgget((key_t) MSGKEY, 0666 | IPC_CREAT );
 
 	// Ensure the message queue was initialized successfully
 	if (msqid == -1)
 	{
-		fprintf(stderr, "msgget failed with error %d\n", errno);
+		fprintf(stdout, "[Error]: msgget failed with error %d\n", errno);
 		return -1;
 	}
 
 	// Install Signal handlers
 	InstallControlCSignalHandlers();
 
+	// Install Message Signal Handlers
 	InstallMessageSignalHandler();
 
 	// Create the child process through fork()
@@ -88,12 +98,13 @@ int main(int argsv, char *args[])
 		// fork failed
 		case -1:
 		{
-			fprintf(stderr, "Fork failed with error code %d. The Controller failed to start.\n", errno);
+			fprintf(stdout, "[Error]: Fork failed with error code %d. The Controller failed to start.\n", errno);
 			return errno;
 		}
 			// Child Process
 		case 0:
 		{
+			// Print Child and Parent PID
 
 			while (1)
 			{
@@ -112,15 +123,8 @@ int main(int argsv, char *args[])
 			// Parent process where pid = PID of child
 		default:
 		{
-
-			// Print Child and Parent PID
-			printf("Child PID: %d\nParent PID: %d\n========================================\n\n", devComPID, getpid());
-			printf("Waiting For Device Registration Messages...\n");
-
-			while (1)
-			{
-				sleep(1);
-			}
+			printf("Child PID: %d\nParent PID: %d\n=========================================\n\n", devComPID, getpid());
+			RunCloudCommunicator();
 
 			break;
 		}
@@ -140,14 +144,18 @@ void MsgRcvd()
 		THRESHOLDCROSSINGMESSAGE tcm;
 		if (!ReceiveMessage(&tcm, sizeof(tcm) - sizeof(tcm.msgHdr.msgType), MSG_THRESHCROSS))
 		{
-			printf("PID %d: Received Threshold Crossing Message! PID = %d\n\n", getpid(), tcm.devInfo.pid);
-			// Now notify the cloud process through fifo
+			printf("[Received]: Threshold Crossing Message Received! Device PID: %d\n\n", tcm.devInfo.pid);
+
+			// Send Request to server to send information about threshold crossing
+			SendThresholdExceededInformationSendRequest(&tcm);
+
 		}
 		else
 		{
-			printf("PID %d: Failed to receive Threshold Crossing Message\n", getpid());
+			printf("[Error]: Failed to receive Threshold Crossing Message\n");
 		}
 	}
+
 
 }
 
@@ -161,17 +169,8 @@ void CtrlCPressed()
 
 	if (devComPID)
 	{
-		// Send Quit Message to Child (DeviceCommunicator)
-		SendProcessCommand(CMD_QUIT, devComPID);
-		printf("\nControl-C has been pressed. Sending Quit Commands to all Devices\n");
-
-		// The child handles the safe unregistering and termination of all registered devices and removes the message queue
-		// Wait for Child to quit
-		int p = 0;
-		wait(&p);
-
-		printf("PID %d: has quit\n", getpid());
-		exit(0);
+		printf("\n[Info]: Control-C has been pressed. Sending Quit Commands to all Devices\n\n");
+		ClientServerQuit(0);
 	}
 }
 

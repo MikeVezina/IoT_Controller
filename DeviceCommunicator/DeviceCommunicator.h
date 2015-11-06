@@ -26,7 +26,7 @@
 
 /* Function Prototypes */
 int RegisterDevice(DEVICEINFO *deviceInfo);
-DEVICEINFO *getRegisteredDevice(pid_t devicePid);
+DEVICEINFO *GetRegisteredDevice(pid_t devicePid);
 void CheckForMessages();
 void ProcessSensorMessage(SENSORDATAMESSAGE *senMsg);
 void SendActCommand(ThresholdAction threshAct);

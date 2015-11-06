@@ -40,7 +40,7 @@ int SendProcessCommand(char command, pid_t destinationPID)
 	PROCESSCOMMANDMESSAGE cmd;
 	SetMessageHeader(&cmd.msgHdr, destinationPID, MSG_CMD);
 
-	cmd.command[0] = command;
+	cmd.command = command;
 
 	if (!SendMessage(&cmd, sizeof(cmd) - sizeof(cmd.msgHdr.msgType)))
 	{

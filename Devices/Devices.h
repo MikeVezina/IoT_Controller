@@ -61,11 +61,7 @@ enum ActuatorErrorNumber{
 	ERR_Action_Not_Defined = 1
 }typedef ActuatorErrorNumber;
 
-
-
 /* --- End Device Enums --- */
-
-
 
 
 

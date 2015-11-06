@@ -10,6 +10,8 @@
 int serverPipeFD;
 int clientPipeFD;
 
+char clientPipeName[CLIENT_PIPE_NAME_LENGTH];
+
 void RunCloudCommunicator()
 {
 	serverPipeFD = OpenPipe(SERVERPIPEPATH, O_WRONLY | O_NONBLOCK);
@@ -27,9 +29,6 @@ void RunCloudCommunicator()
 
 	printf("[Info]: Waiting for Device Registration Messages...\n\n");
 
-
-	char clientPipeName[CLIENT_PIPE_NAME_LENGTH];
-
 	// Create Pipe Name using client pipe name standard (CLIENTPIPEPATH) and the PID of the process
 	sprintf(clientPipeName, CLIENTPIPEPATH, getpid());
 
@@ -45,6 +44,41 @@ void RunCloudCommunicator()
 	// Loop and check client pipe
 	while (1)
 	{
+		USERRESPONSEMESSAGE userRes;
+		if (!ReceiveMessage(&userRes, sizeof(userRes) - sizeof(userRes.msgHdr.msgType), MSG_USRRES))
+		{
+
+			printf("[Received]: Received User Command Response Message\n");
+			// Set up response to cloud
+			DATAMESSAGE dataMsg;
+			dataMsg.clientPID = getpid();
+			dataMsg.response = RESPONSE_USER;
+			dataMsg.type = MSG_RESPONSE;
+
+			// Write the request to the cloud to tell it that we have sensor data available
+			if (WriteToPipe(serverPipeFD, SERVERPIPEPATH, &dataMsg, sizeof(dataMsg)) == -1)
+			{
+				// If errno == ENOENT, that means that the pipe no longer exists. Safely release all resources and quit
+				if (errno == ENOENT)
+				{
+					printf("[Error]: Failed to Send User Response Data Message to Server Pipe! Pipe No Longer Exists!\n");
+					ClientServerQuit(1);
+				}
+			}
+
+			// Write the response to the get command of the cloud
+			if (WriteToPipe(serverPipeFD, SERVERPIPEPATH, &userRes, sizeof(userRes)) == -1)
+			{
+				// If errno == ENOENT, that means that the pipe no longer exists. Safely release all resources and quit
+				if (errno == ENOENT)
+				{
+					printf("[Error]: Failed to Send User Response to Server Pipe! Pipe No Longer Exists!\n");
+					ClientServerQuit(1);
+				}
+			}
+
+		}
+
 		// Read data message
 		int readRes = ReadFromPipe(clientPipeFD, clientPipeName, &dataMsg, sizeof(dataMsg));
 
@@ -69,7 +103,7 @@ void RunCloudCommunicator()
 							printf("[Response]: Server Failed to Process Request\n\n");
 							break;
 
-						case RESPONSE_SENSOR_INFO: // For now, this wont be used by the cloud controller
+						case RESPONSE_USER: // For now, this wont be used by the cloud controller
 						default:
 							break;
 					}
@@ -84,15 +118,55 @@ void RunCloudCommunicator()
 
 void ProcessServerRequest(DATAMESSAGE *dataMsg)
 {
-	if(dataMsg->request == REQUEST_READ_SENSOR_INFO)
-	{
+	// Make sure the data message is of type Request
+	if (dataMsg->type != MSG_REQUEST)
+		return;
 
+	// If the cloud is requesting the latest sensor info, we will get the info and send it back
+	if (dataMsg->request == REQUEST_SENSOR_INFO)
+	{
+		// Read Request From Pipe
+		USERREQUESTMESSAGE userReq;
+		int readRes = ReadFromPipe(clientPipeFD, clientPipeName, &userReq, sizeof(userReq));
+		SetMessageHeader(&userReq.msgHdr, devComPID, MSG_USRREQ);
+
+		// Use the received message as the request to the device communicator
+		if (readRes > 0)
+		{
+			// Send the Request Message to the device communicator
+			if (SendMessage(&userReq, sizeof(userReq) - sizeof(userReq.msgHdr.msgType)))
+			{
+				printf("[Error]: Failed to Send Request Message To Device Communicator\n");
+			}
+			else
+			{
+				printf("[Sent]: User Request to Device Communicator\n");
+			}
+		}
 	}
 	else if (dataMsg->request == REQUEST_ACTUATOR_ACTION)
 	{
 
-	}
+		// Read Request From Pipe
+		USERREQUESTMESSAGE userReq;
+		int readRes = ReadFromPipe(clientPipeFD, clientPipeName, &userReq, sizeof(userReq));
+		SetMessageHeader(&userReq.msgHdr, devComPID, MSG_USRREQ);
 
+		// Use the received message as the request to the device communicator
+		if (readRes > 0)
+		{
+			// Send the Request Message to the device communicator
+			if (SendMessage(&userReq, sizeof(userReq) - sizeof(userReq.msgHdr.msgType)))
+			{
+				printf("[Error]: Failed to Send Request Message To Device Communicator\n");
+			}
+			else
+			{
+				printf("[Sent]: User Request to Device Communicator\n");
+			}
+		}
+
+	}
 
 }
 
@@ -104,7 +178,7 @@ void SendThresholdExceededInformationSendRequest(THRESHOLDCROSSINGMESSAGE *thres
 	dataMsg.request = REQUEST_THRESHOLD_EXCEEDED;
 	dataMsg.type = MSG_REQUEST;
 
-	// Write the request to send threshold crossing information to the server pipe
+// Write the request to send threshold crossing information to the server pipe
 	if (WriteToPipe(serverPipeFD, SERVERPIPEPATH, &dataMsg, sizeof(dataMsg)) == -1)
 	{
 		// If errno == ENOENT, that means that the pipe no longer exists. Safely release all resources and quit
@@ -114,7 +188,7 @@ void SendThresholdExceededInformationSendRequest(THRESHOLDCROSSINGMESSAGE *thres
 		}
 	}
 
-	// Followed By writing the two main data structures for the threshold crossing to the server pipe
+// Followed By writing the two main data structures for the threshold crossing to the server pipe
 	if (WriteToPipe(serverPipeFD, SERVERPIPEPATH, &(threshCrossMsg->devInfo), sizeof(threshCrossMsg->devInfo)) == -1)
 	{
 		// If errno == ENOENT, that means that the pipe no longer exists. Safely release all resources and quit
@@ -146,30 +220,30 @@ void ClientServerQuit(int status)
 
 	char clientPipeName[CLIENT_PIPE_NAME_LENGTH];
 
-	// Create Pipe Name using client pipe name standard (CLIENTPIPEPATH) and the PID of the process
+// Create Pipe Name using client pipe name standard (CLIENTPIPEPATH) and the PID of the process
 	sprintf(clientPipeName, CLIENTPIPEPATH, getpid());
 
-	// Unlink all associated files
+// Unlink all associated files
 	unlink(clientPipeName);
 	unlink(SERVERPIPEPATH);
 
-	// Close all file descriptors
+// Close all file descriptors
 	close(clientPipeFD);
 	close(serverPipeFD);
 
-	// Exit the cloud communications controller
+// Exit the cloud communications controller
 	CloudCommunicatorExit();
 }
 
 void CloudCommunicatorExit()
 {
 
-printf("[Sent]: Sent Quit Message To Device Communicator\n");
-	// Send Quit Message to Child (DeviceCommunicator)
+	printf("[Sent]: Sent Quit Message To Device Communicator\n");
+// Send Quit Message to Child (DeviceCommunicator)
 	SendProcessCommand(CMD_QUIT, devComPID);
 
-	// The child handles the safe unregistering and termination of all registered devices and removes the message queue
-	// Wait for Child to quit
+// The child handles the safe unregistering and termination of all registered devices and removes the message queue
+// Wait for Child to quit
 
 	wait(0);
 

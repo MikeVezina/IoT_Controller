@@ -11,6 +11,9 @@
 
 #include "DeviceCommunicator.h"
 
+// The User Requested Device PID (Used for sending the requested info back to the cloud communicator
+pid_t g_userRequestedDevicePID;
+
 // Adds the device to the linked list
 int RegisterDevice(DEVICEINFO *deviceInfo)
 {
@@ -132,7 +135,7 @@ int UnregisterDevice(pid_t devicePID)
 
 // Returns 0 if the device pid is NOT a registered device
 // Returns the pointer to the DeviceInfo in a DeviceLink that is part of the registered devices linked list
-DEVICEINFO *getRegisteredDevice(pid_t devicePid)
+DEVICEINFO *GetRegisteredDevice(pid_t devicePid)
 {
 	// If the head device is null, the device pid is not registered
 	if (!headRegisteredDevice)
@@ -163,7 +166,7 @@ void CheckForMessages()
 	if (!ReceiveMessage(&cmd, sizeof(cmd) - sizeof(cmd.msgHdr.msgType), MSG_CMD))
 	{
 
-		switch (cmd.command[0])
+		switch (cmd.command)
 		{
 			case CMD_REGACK: /* Device Registration Acknowledged */
 				break;
@@ -187,7 +190,6 @@ void CheckForMessages()
 				{
 					printf("[Received]: PID %d: Successfully unregistered device (PID: %d)\n\n", getpid(), cmd.msgHdr.sourcePid);
 				}
-
 				break;
 		}
 	}
@@ -215,7 +217,7 @@ void CheckForMessages()
 			PROCESSCOMMANDMESSAGE cmdMsg;
 
 			SetMessageHeader(&cmdMsg.msgHdr, regMsg.devInfo.pid, MSG_CMD);
-			cmdMsg.command[0] = CMD_REGACK;
+			cmdMsg.command = CMD_REGACK;
 
 			// Sends the Registration acknowledgement to the device
 			if (SendMessage(&cmdMsg, sizeof(cmdMsg) - sizeof(cmdMsg.msgHdr.msgType)))
@@ -228,11 +230,88 @@ void CheckForMessages()
 
 		}
 	}
-	// Receives and Processes Sensor Data message
+
+	// We want to handle user requests from the Cloud Communicator
+	USERREQUESTMESSAGE urm;
+
+	if (!ReceiveMessage(&urm, sizeof(urm) - sizeof(urm.msgHdr.msgType), MSG_USRREQ))
+	{
+		printf("[Received]: User Request for Device PID: %d\n", urm.devicePID);
+
+		DEVICEINFO *devInfo = GetRegisteredDevice(urm.devicePID);
+
+		// Device PID does not exist
+		if (!devInfo || devInfo->devType != urm.devType)
+		{
+
+			printf("[Failed]: Device PID: %d not found or Device Type Mismatch. Sending Response to Cloud...\n", urm.devicePID);
+
+			// Send Failed User Response Message to parent
+			USERRESPONSEMESSAGE userRes;
+			SetMessageHeader(&userRes.msgHdr, getppid(), MSG_USRRES);
+
+			// Error Occured
+			userRes.status = -1;
+
+
+			// Send the message
+			if (SendMessage(&userRes, sizeof(userRes) - sizeof(userRes.msgHdr.msgType)))
+			{
+				printf("[Error]: Failed to Send User Response Message.\n");
+			}
+			else
+			{
+				printf("[Sent]: Sent User Command Response Message to Cloud Communicator\n");
+			}
+
+		}
+
+		else if (urm.devType == DEVTYPE_SENSOR)
+		{
+			// Send Sensor Info Request Message to Device
+			PROCESSCOMMANDMESSAGE pcm;
+			SetMessageHeader(&pcm.msgHdr, urm.devicePID, MSG_CMD);
+			pcm.command = CMD_SENREQ;
+
+			if (SendMessage(&pcm, sizeof(pcm) - sizeof(pcm.msgHdr.msgType)))
+			{
+				printf("[Error]: Failed to Send Sensor Information Request Command.\n");
+			}
+			else
+			{
+				// Set the global device PID to the device PID
+				g_userRequestedDevicePID = devInfo->pid;
+				printf("[Sent]: Sent Sensor Information Request Command\n[Info]: Waiting for Device Response...\n");
+			}
+		}
+		else if (urm.devType == DEVTYPE_ACTUATOR)
+		{
+
+			// Send Sensor Info Request Message to Device
+			ACTUATORCOMMANDMESSAGE acm;
+			SetMessageHeader(&acm.msgHdr, urm.devicePID, MSG_ACTCMD);
+
+			acm.threshAction = urm.thac;
+			acm.commandSequence = currentCommandSequence++;
+
+			if (SendMessage(&acm, sizeof(acm) - sizeof(acm.msgHdr.msgType)))
+			{
+				printf("[Error]: Failed to Send Sensor Information Request Command.\n");
+			}
+			else
+			{
+				printf("[Sent]: Sent Actuator Action Request Command\n");
+			}
+
+		}
+
+	}
+
+// Receives and Processes Sensor Data message
 	SENSORDATAMESSAGE senMsg;
 	if (!ReceiveMessage(&senMsg, sizeof(senMsg) - sizeof(senMsg.msgHdr.msgType), MSG_SENINF))
 	{
-		ProcessSensorMessage(&senMsg);
+     	ProcessSensorMessage(&senMsg);
 	}
 
 }
@@ -240,44 +319,62 @@ void CheckForMessages()
 // Processes the sensor message and any sensor information
 void ProcessSensorMessage(SENSORDATAMESSAGE *senMsg)
 {
-	// Ensure senMsg is not null
+// Ensure senMsg is not null
 	if (!senMsg)
 	{
 		fprintf(stdout, "[Error]: ProcessSensorMessage(): *senMsg is null");
 		return;
 	}
 
-	// Get the device info from the received sensor message
-	DEVICEINFO *devInfo = getRegisteredDevice(senMsg->msgHdr.sourcePid);
+// Get the device info from the received sensor message
+	DEVICEINFO *devInfo = GetRegisteredDevice(senMsg->msgHdr.sourcePid);
 
-	// If devInfo is null, return without processing the message
+// If devInfo is null, return without processing the message
 	if (!devInfo)
 		return;
 
-	// Ensure that only devices that are sensors can send sensor information messages
+// Ensure that only devices that are sensors can send sensor information messages
 	if (devInfo->devType != DEVTYPE_SENSOR)
 	{
 		fprintf(stdout, "[Received]: A Non-Sensor Device Has Sent a Sensor Information Message! (Only sensors can send sensor information messages)\n");
 		return;
 	}
 
-	// Print Sensor Info Received
-	fprintf(stdout, "[Received]: Sensor Info Received From PID %d:\n", devInfo->pid);
+	// Process Mobile Device Sensor Commands
+	if (g_userRequestedDevicePID > 1 && devInfo->pid == g_userRequestedDevicePID)
+	{
+		USERRESPONSEMESSAGE usrRes;
+		SetMessageHeader(&usrRes.msgHdr, getppid(), MSG_USRRES);
 
-	// Process The Sensor Information
-	PrintSensorInfo(&senMsg->sensorInfo);
+		usrRes.devType = DEVTYPE_SENSOR;
+		usrRes.devicePID = devInfo->pid;
+		usrRes.senInfo = senMsg->sensorInfo;
 
-	// Add New Line After Sensor Info
-	fprintf(stdout, "\n");
+		if (!SendMessage(&usrRes, sizeof(usrRes) - sizeof(usrRes.msgHdr.msgType)))
+		{
+			printf("[Sent]: Sensor User Response Sent to Cloud Controller\n");
+		}
+		g_userRequestedDevicePID = 0;
+		return;
+	}
 
-	// If the device has a threshold, then check if that threshold has been exceeded
+// Print Sensor Info Received
+	fprintf(stdout, "[Received]: Sensor Info Received From PID %d\n", devInfo->pid);
+
+// If the device has a threshold, then check if that threshold has been exceeded
 	if (devInfo->hasThreshold)
 	{
 		if (senMsg->sensorInfo.data[0] > devInfo->threshold)
 		{
 			// Print Valid Information
-			printf("[Warning]: Sensor Threshold Exceeded For The Following Device\n");
+			printf("[Warning]: Sensor Threshold Exceeded For The Following Device:\n");
 			PrintDeviceInfo(devInfo);
+
+			// Process The Sensor Information
+			PrintSensorInfo(&senMsg->sensorInfo);
+
+			// Add New Line After Sensor Info
+			fprintf(stdout, "\n");
 
 			// Use a variable to track the difference in sent sequences.
 			// If the difference is 0, No actuators are responsible for the selected action
@@ -318,11 +415,11 @@ void ProcessSensorMessage(SENSORDATAMESSAGE *senMsg)
 void SendActCommand(ThresholdAction threshAct)
 {
 
-	// It is assumed that if we have more than one of the same type of actuator,
-	// That the Threshold action will be applied to all of the actuators. For example:
-	// If smoke is detected, turn on ALL Sprinklers
+// It is assumed that if we have more than one of the same type of actuator,
+// That the Threshold action will be applied to all of the actuators. For example:
+// If smoke is detected, turn on ALL Sprinklers
 
-	// Look through all devices to check for actuators that handle the specified threshold action
+// Look through all devices to check for actuators that handle the specified threshold action
 
 	PDEVICELINK pDevLink = headRegisteredDevice;
 	while (pDevLink)
@@ -356,7 +453,7 @@ void SendActCommand(ThresholdAction threshAct)
 // Function to release all resources and exit
 void Quit()
 {
-	// Send Quit Command to all registered devices
+// Send Quit Command to all registered devices
 	PDEVICELINK pDevLink = headRegisteredDevice;
 	while (pDevLink)
 	{
@@ -373,7 +470,7 @@ void Quit()
 
 		// Set a timeout limit to wait for close acknowledgement
 		time_t startTime = time(0);
-		while (ReceiveMessage(&cmd, sizeof(cmd) - sizeof(cmd.msgHdr.msgType), MSG_CMD) || cmd.command[0] != CMD_CLOSEACK || cmd.msgHdr.sourcePid != pDevLink->devInfo.pid)
+		while (ReceiveMessage(&cmd, sizeof(cmd) - sizeof(cmd.msgHdr.msgType), MSG_CMD) || cmd.command != CMD_CLOSEACK || cmd.msgHdr.sourcePid != pDevLink->devInfo.pid)
 		{
 			if (time(0) - startTime >= DEVCLOSE_TIMEOUT)
 			{
@@ -385,9 +482,9 @@ void Quit()
 			usleep(50000);
 		}
 
-		if (cmd.command[0] == CMD_CLOSEACK)
+		if (cmd.command == CMD_CLOSEACK)
 		{
-			printf("[Received]: Device '%s' (PID %d) has quit Successfully!\n\n",  pDevLink->devInfo.devName, cmd.msgHdr.sourcePid);
+			printf("[Received]: Device '%s' (PID %d) has quit Successfully!\n\n", pDevLink->devInfo.devName, cmd.msgHdr.sourcePid);
 		}
 
 		// Continue to quit next device

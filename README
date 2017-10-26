@@ -1,0 +1,175 @@
+Assignment 1: Internet Of Things Emulator
+Michael Vezina
+SYSC 4001 (Operating Systems)
+10/09/15
+
+
+
+[ = Project Name = ]
+
+Internet of Things Emulator
+
+[ = Project Developer = ]
+
+Michael Vezina
+
+
+[ = Project Description = ]
+
+The project objective is to create an Internet of things emulator.
+Internet of Things (IoT) is a term used to describe a network of physical
+devices (or things) embedded with software and a network to allow communication
+between these devices. This project emulates the network, controller and the devices
+that would normally be connected within the IoT.
+
+This project has three main modules:
+1. Cloud (Server) Module
+
+2. Controller Module. Including:
+	- A device communicator / controller
+	- A network/cloud communicator
+
+3. Device Module. Including:
+	- A sensor module (sensing data - such as temperature)
+	- An actuator module (performing physical actions such as turning power on/off).
+		- For this emulator, the actuator module just prints the action to the console.
+
+
+[ = About the Emulator = ]
+
+This project was developed for Assignment 1 of my SYSC 4001 (Operating Systems) course.
+
+The Cloud Process emulates a server and connects to various controller clients. The cloud
+notifies the user (just prints to console) when a connected controller client has detected
+that a device threshold has been exceeded. The cloud then prints the device info and current sensor info
+for the device that exceeded the threshold. Device Info includes the threshold action completed.
+
+The controller process communicates with the devices and the cloud modules.
+
+The sensor and actuator device processes emulate a device (or thing) connected to the IoT.
+They communicate with the controller, informing of events such as exceeding the threshold.
+
+
+[ = How To Use The Emulator = ]
+
+Step 1: Start the 'IoT_Cloud' Module. This module does not take any command line arguments.
+		This will start the Cloud process. This process uses Named pipes to communicate
+		with the cloud communicator controller process.
+		
+		Note: The Cloud process must be started before any controller processes can start.
+
+Step 2: Start the 'IoT_Controller' Module. This module has a mandatory command line argument. 
+		(See 'IoT_Controller' Module Usage below). This will start the controller process.
+		This process is used to maintain and communicate with registered devices and to
+		communicate with the cloud process.
+		
+		Note: The IoT_Cloud process must be started before starting the IoT_Controller process.
+		
+Step 3: The main modules have now been started and initialized. The next step is to start a device.
+		This step can be repeated until the desired number of devices are connected.
+		There are two options for creating a device process:
+			
+			- You can create a Sensing device through the 'IoT_Sensor' module. (See 'IoT_Sensor' Module Usage below).
+			
+				OR / AND:
+
+			- You can create a Actuator device through the 'IoT_Actuator' module. (See 'IoT_Actuator' Module Usage below).
+
+Step 4: Repeat Step 3 until desired number of devices are connected.
+
+Step 5: To Exit any of the modules, Enter Ctrl+C through the console. The processes will dispose and free up all allocated resources.
+
+
+[ = Module Command Line Usage = ]
+
+'IoT_Cloud' Module Usage:		The cloud module does not utilize command line arguments.
+								Command To Start IoT_Cloud: './IoT_Cloud'
+							
+
+[Note]: For the Following Modules: You can request module usage using the command line. 
+		Use (without quotes): './*ModuleName* -help'
+
+
+'IoT_Controller' Module Usage:	The controller module utilizes ONE command line argument.
+								Command To Start IoT_Controller: './IoT_Controller [ControllerName]'
+								Where [ControllerName] is the name of the controller (String: 1-24 characters). 					
+
+'IoT_Sensor' Module Usage:		The sensor module utilizes TWO mandatory command line argument and ONE optional argument.
+								Command To Start IoT_Sensor: './IoT_Sensor [DeviceName] [SensorType] [SensorThreshold]'
+								Where [DeviceName] is (String) the name of the Sensor (1-24 characters). 
+								Where [SensorType] is (Integer) the ID of the type of Sensor (See Device Information Section Below For IoT_Sensor SensorType). 
+								Where [SensorThreshold] is an optional argument. (Integer) The maximum threshold for the sensor. An action is triggered
+									if this threshold is exceeded. See Device Information below for IoT_Sensor for the threshold action completed. 
+								
+'IoT_Actuator' Module Usage:	The Actuator module utilizes TWO mandatory command line argument.
+								Command To Start IoT_Actuator: './IoT_Actuator [DeviceName] [ActuatorType]'
+								Where [DeviceName] is (String) the name of the Actuator (1-24 characters). 
+								Where [ActuatorType] is (Integer) the ID of the type of Actuator (See Device Information below For IoT_Actuator ActuatorType
+									and the threshold action that they handle) 
+
+
+[ = Device Information =]
+
+0. *NOTICE* IoT_Cloud:	To use get/set commands follow the on screen prompts. Because the User process and the cloud process use the same console, the text may get
+						mixed up. For example, if the mobile device program prompts for a device PID and the cloud prints a message out, the text inputted will still correspond
+						to the prompt.
+
+1. IoT_Sensor [SensorType] Values:
+	11 = Temperature Sensor. Threshold Exceeded Actions: 2, 3 (Turns on Air Conditioning and Rings Bell when Temperature has exceeded threshold)
+	12 = Smoke Detector. Threshold Exceeded Actions: 4, 7 (Rings Fire Alarm, Turns Water Sprinkler On when smoke density threshold has been exceeded)
+	13 = Light Sensor. Threshold Exceeded Actions: 5 (Turns off light switch when light threshold has been exceeded)
+	
+2. IoT_Actuator [ActuatorType] Values:
+	21 = Air Conditioning Power Switch. Handles the following Threshold Exceeded Actions: 1, 2
+	22 = Bell. Handles the following Threshold Exceeded Actions: 3
+	23 = Fire Alarm. Handles the following Threshold Exceeded Actions: 4
+	24 = Water Sprinkler. Handles the following Threshold Exceeded Actions: 7, 8
+	25 = Light Switch. Handles the following Threshold Exceeded Actions: 5, 6
+	
+3. The following are threshold exceeded action values, their associated action bits, and a description of what happens:
+ DEC:	Action:			 HEX:	 Description:
+	0 = NOTHING			(0x00)	(Nothing Happens)
+	1 = AC_OFF			(0x01)	(Turns Air Conditioning Switch Off)
+	2 = AC_ON			(0x02)	(Turns Air Conditioning Switch On)
+	4 = BELL_RING		(0x04)	(Rings Bell)
+	8 = FIRE_ALARM_RING (0x08) 	(Rings Fire Alarm)
+	16 = LIGHT_OFF		(0x10)	(Turns Light Switch Off)
+	32 = LIGHT_ON		(0x20)	(Turns Light Switch On)
+	64 = WATER_ON		(0x40) 	(Turns Water Sprinkler On)
+	128 = WATER_OFF		(0x80)	(Turns Water Sprinkler Off)
+	
+	
+	
+Example (Run in this order, each on a seperate terminal):
+1. ./IoT_Cloud
+2. ./IoT_Controller "MainController"
+3. ./IoT_Sensor "ACSENS" 11 10
+3. ./IoT_Sensor "SMOKESENS" 12 10
+4. ./IoT_Actuator "ACACT" 21
+5. ./IoT_Actuator "FIREALARMACT" 23
+
+******     The following is example output for get and set commands:     ******
+
+[Mobile Device]: Please Enter the PARENT PID of the controller you would like to connect to: 12471
+[Success]: Your device is now associated with Controller 12471!
+
+[Mobile Device]: Would you like to send a (get) or (set) command? set
+[Mobile Device]: Please Enter the PID of the Receiving Device: 12484
+[Mobile Device]: Please Enter the Threshold Action For the Actuator (See Documentation for Decimal Values): 16
+[Request] Requested Command to Device!
+[Sent] Message to Device Controller!
+
+*******************          How to use Get/Set Cloud Commands (25% BONUS)         *******************
+1. Enter The PARENT PID of the controller when prompted by the Mobile Device. The Mobile Device can only be associated with one controller
+	(this simulates a real life scenario because in reality we would only want to allow the user to connect to one controller.)
+2. Enter the Command (get or set). Get allows you to get the sensor info using device PID and set allows you to send an action to an actuator
+3. Enter the PID of the device
+4. (Only For Actuators): Enter the Decimal Value of the threshold action to be set (See Section 3 in device information for decimal values of threshold actions)
+
+Note: Because the User process and the cloud process use the same console, the text may get
+	mixed up. For example, if the mobile device program prompts for a device PID and the cloud prints a message out, the text inputted will still correspond
+	to the prompt, but the display of text will be disoriented. To test the get/set commands (without having the obstruction of cloud output), it is recommended that 
+	you dont put any device sensor thresholds. Ex: './IoT_Sensor "SMOKESENS" 12' Creates a smoke sensor without any threshold. So no threshold messages will be sent to the cloud,
+	which will allow you to test the get/set functionality.	
+	
+
